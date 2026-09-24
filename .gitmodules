@@ -1,0 +1,3 @@
+[submodule "ecodan_protocol"]
+	path = ecodan_protocol
+	url = git@github.com:tatfri/ecodan_protocol.git

@@ -26,16 +26,11 @@ def interpolate_cop(temperature):
     return config.TEMPERATURE_TO_COP[temperatures[-1]]
 
 def get_temperature_setpoint_for_fraction(fraction):
-    if fraction <= 0.2:
-        return config.INDOOR_TEMPERATURE_MIDDLE_POINT + 2.0
-    elif fraction <= 0.4:
-        return config.INDOOR_TEMPERATURE_MIDDLE_POINT + 1.0
-    elif fraction <= 0.6:
-        return config.INDOOR_TEMPERATURE_MIDDLE_POINT
-    elif fraction <= 0.8:
-        return config.INDOOR_TEMPERATURE_MIDDLE_POINT - 1.0
-    else:
-        return config.INDOOR_TEMPERATURE_MIDDLE_POINT - 2.0
+    # Determine the temperature setpoint based on the fraction using the TEMPERATURE_ADJUSTMENT list from config
+    for threshold, adjustment in config.TEMPERATURE_ADJUSTMENT:
+        if fraction <= threshold:
+            return config.INDOOR_TEMPERATURE_MIDDLE_POINT + adjustment
+    return config.INDOOR_TEMPERATURE_MIDDLE_POINT + config.TEMPERATURE_ADJUSTMENT[-1][1]
 
 def estimate_heating_energy_kwh(start_time):
     end_time = start_time + ESTIMATION_DURATION_SECONDS
@@ -151,7 +146,6 @@ def get_heating_periods(start_time, schedule_dhw_heating):
 
     for i in range(5):
         fraction = (i + 1) * 0.20
-        print(fraction)
         intervals = get_low_price_intervals(start_time, fraction)
 
         intervals = cut_intervals(prev_intervals, intervals)

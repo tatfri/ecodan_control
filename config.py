@@ -5,7 +5,17 @@ ECODAN_UART = "/dev/ttyAMA0"
 #
 # Note that this doesn't necessarily match the actual real indoor temperature. If the actual
 # temperature tends to be too high or too low, you may need to adjust the middle point accordingly.
-INDOOR_TEMPERATURE_MIDDLE_POINT = 18.0
+INDOOR_TEMPERATURE_MIDDLE_POINT = 19.0
+
+# Temperature adjustments based on the fraction of low electricity price intervals.
+# 0.2 means that the price is in the lowest 20% of all prices within 24 hours.
+TEMPERATURE_ADJUSTMENT = [
+    (0.2, 1.0),
+    (0.4, 0.0),
+    (0.6, 0.0),
+    (0.8, -1.0),
+    (1.0, -1.0)
+]
 
 # Default temperature setpoint used if electricity price API can't be accessed.
 INITIAL_INDOOR_TEMPERATURE = 19.0

@@ -122,6 +122,7 @@ def maybe_set_temperature_setpoint(ecodan_client, now):
 def main_loop(ecodan_client):
     while True:
         now = time.time()
+        next_tick = time.perf_counter() + 1
 
         if should_update_heating_periods():
             update_heating_periods(now)
@@ -132,7 +133,8 @@ def main_loop(ecodan_client):
         maybe_start_dhw_heating(ecodan_client, now)
         maybe_set_temperature_setpoint(ecodan_client, now)
 
-        time.sleep(1)
+        sleep_duration = max(0, next_tick - time.perf_counter())
+        time.sleep(sleep_duration)
 
 if __name__ == "__main__":
     with client.EcodanClient(config.ECODAN_UART) as ecodan_client:

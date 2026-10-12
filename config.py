@@ -1,7 +1,7 @@
 ECODAN_UART = "/dev/ttyAMA0"
 
 # Middle point indoor temperature setpoint. Temperature setpoint sent to the heat pump will
-# fluctuate +- 2 degrees celsius around the middle point.
+# fluctuate +- 1 degrees celsius around the middle point.
 #
 # Note that this doesn't necessarily match the actual real indoor temperature. If the actual
 # temperature tends to be too high or too low, you may need to adjust the middle point accordingly.
@@ -31,9 +31,7 @@ DHW_TANK_HEATING_PERIOD_DURATION_SECONDS = 20 * 60  # 20 minutes
 HEATING_PERIODS_UPDATE_TIME_OF_DAY = "15:00"
 
 # -----------------------
-# Settings below only affect estimation of heating energy needed, they do not affect the control,
-# except that INDOOR TEMPERATURE is used for the whole 24h period if the estimated heating cost is below
-# the threshold below.
+# Settings below only affect estimation of heating energy needed, they do not affect the control.
 # -----------------------
 
 # If electricity price estimated to be needed for heating without optimization is below this limit,

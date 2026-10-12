@@ -30,6 +30,13 @@ DHW_TANK_HEATING_PERIOD_DURATION_SECONDS = 20 * 60  # 20 minutes
 # Finnish electricity market prices for the next day will be available around 14:00.
 HEATING_PERIODS_UPDATE_TIME_OF_DAY = "15:00"
 
+# Minimum length for a temperature adjustment interval. Finnish electricity market prices are updated
+# once every 15 minutes, but the heat pump will usually take around 6 minutes to start/stop after
+# adjusting the temperature so utilizing intervals shorter than this minimum duration may not be effective.
+#
+# Value of 20 minutes here forces minimum period length to 30 minutes.
+MIN_HEATING_PERIOD_DURATION_SECONDS = 20 * 60  # 20 minutes
+
 # -----------------------
 # Settings below only affect estimation of heating energy needed, they do not affect the control.
 # -----------------------

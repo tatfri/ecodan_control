@@ -128,6 +128,54 @@ def join_intervals(intervals0, intervals1):
 def get_low_price_intervals(start_time, fraction):
     return electricity_client.get_low_price_intervals(start_time, start_time + ESTIMATION_DURATION_SECONDS, fraction)
 
+def merge_short_intervals(original_intervals, min_interval_length):
+    # If there are intervals that are shorter than minimun interval with their neighbors. Merge them with
+    # either the previous or the next interval depending on which one has lower set temperature. Set the
+    # merged interval's temperature to the lower one.
+
+    intervals = original_intervals.copy()
+
+    change_done = True
+    while change_done:
+        change_done = False
+        i = 0
+        while i < len(intervals):
+            start, end, temperature_setpoint = intervals[i]
+            if end - start < min_interval_length:
+                change_done = True
+                if i > 0 and i < len(intervals) - 1:
+                    prev_start, prev_end, prev_temp = intervals[i - 1]
+                    next_start, next_end, next_temp = intervals[i + 1]
+                    if prev_temp < next_temp:
+                        intervals[i - 1] = (prev_start, end, prev_temp)
+                        del intervals[i]
+                        i -= 1
+                    else:
+                        intervals[i + 1] = (start, next_end, next_temp)
+                        del intervals[i]
+                        i -= 1
+                elif i > 0:
+                    prev_start, prev_end, prev_temp = intervals[i - 1]
+                    intervals[i - 1] = (prev_start, end, prev_temp)
+                    del intervals[i]
+                    i -= 1
+                elif i < len(intervals) - 1:
+                    next_start, next_end, next_temp = intervals[i + 1]
+                    intervals[i + 1] = (start, next_end, next_temp)
+                    del intervals[i]
+                    i -= 1
+            i += 1
+    return intervals
+
+def join_consecutive_intervals(intervals):
+    joined_intervals = []
+    for start, end, temperature_setpoint in intervals:
+        if joined_intervals and joined_intervals[-1][1] == start and joined_intervals[-1][2] == temperature_setpoint:
+            joined_intervals[-1] = (joined_intervals[-1][0], end, temperature_setpoint)
+        else:
+            joined_intervals.append((start, end, temperature_setpoint))
+    return joined_intervals
+
 def get_heating_periods(start_time, schedule_dhw_heating):
     weather_client.clear()
     electricity_client.clear()
@@ -158,12 +206,13 @@ def get_heating_periods(start_time, schedule_dhw_heating):
     all_intervals = sorted(all_intervals, key=lambda x: x[0])
 
     # Join consecutive intervals with same temperature
-    joined_intervals = []
-    for start, end, temperature_setpoint in all_intervals:
-        if joined_intervals and joined_intervals[-1][1] == start and joined_intervals[-1][2] == temperature_setpoint:
-            joined_intervals[-1] = (joined_intervals[-1][0], end, temperature_setpoint)
-        else:
-            joined_intervals.append((start, end, temperature_setpoint))
+    joined_intervals = join_consecutive_intervals(all_intervals)
+
+    # Merge intervals that are shorter than the minimum heating period duration.
+    joined_intervals = merge_short_intervals(joined_intervals, config.MIN_HEATING_PERIOD_DURATION_SECONDS)
+
+    # Join again because the previous step may have created new consecutive intervals with the same temperature.
+    joined_intervals = join_consecutive_intervals(joined_intervals)
 
     return joined_intervals, dwh_heating_start_time
 

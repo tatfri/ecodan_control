@@ -215,11 +215,11 @@ def main():
         "--update-time",
         type=parse_update_time,
         default=parse_update_time(
-            config.HEATING_PERIODS_UPDATE_TIME_OF_DAY
+            config.DHW_HEATING_UPDATE_TIME_OF_DAY
         ),
         help=(
             "Start time of each 24-hour heating period "
-            "(HH:MM). Defaults to config.py."
+            "(HH:MM). Defaults to config.DHW_HEATING_UPDATE_TIME_OF_DAY."
         ),
     )
 

@@ -1,7 +1,7 @@
 import time
 
 from ecodan_protocol import client
-from heating_estimation import get_heating_periods, print_periods, get_energy_price
+from heating_estimation import get_dhw_start_time_and_clear_caches, get_temperature_setpoint, print_summary, get_energy_price
 import electricity_client
 import config
 
@@ -11,7 +11,7 @@ last_status_fetched = 0
 prev_hour = -1
 indoor_heating_input_power = []
 dhw_heating_input_power = []
-heating_periods = []
+last_setpoint_update_slot = None
 dhw_heating_start_time = None
 temperature_setpoint = 0.0
 logfile = open("heating_log.txt", "a")
@@ -22,8 +22,7 @@ def get_kwh(power_consumed):
         total_kwh += power_kw * (STATUS_FETCH_INTERVAL_S / 3600.0)
     return total_kwh
 
-def update_heating_periods(now):
-    global heating_periods
+def update_dhw_heating_start_time(now):
     global dhw_heating_start_time
 
     total_indoor_heating_power_kwh = get_kwh(indoor_heating_input_power)
@@ -31,7 +30,7 @@ def update_heating_periods(now):
     indoor_heating_price = get_energy_price(indoor_heating_input_power)
     dhw_heating_price = get_energy_price(dhw_heating_input_power)
 
-    print(f"{time.strftime('%Y-%m-%d %H:%M:%S')}, Updating heating periods")
+    print(f"{time.strftime('%Y-%m-%d %H:%M:%S')}, Updating DHW heating start time and electricity prices")
     print("--------------------------------------------------")
     print(f"Indoor heating power: {total_indoor_heating_power_kwh:.2f} kWh")
     print(f"Indoor heating price: {indoor_heating_price:.2f} c")
@@ -43,8 +42,8 @@ def update_heating_periods(now):
     indoor_heating_input_power.clear()
     dhw_heating_input_power.clear()
 
-    heating_periods, dhw_heating_start_time = get_heating_periods(now, True)
-    print_periods(now, heating_periods, dhw_heating_start_time)
+    dhw_heating_start_time = get_dhw_start_time_and_clear_caches(now)
+    print_summary(now, dhw_heating_start_time)
 
 def fetch_status(ecodan_client,now):
     global last_status_fetched
@@ -78,13 +77,13 @@ def fetch_status(ecodan_client,now):
     logfile.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} indoor {current_indoor_heating_input_power} dhw {current_dhw_heating_input_power} dhw_temp {dhw_temp} output {output_heater_power_kw} electricity_price {electricity_price} set_temp {temperature_setpoint}\n")
     logfile.flush()
 
-def should_update_heating_periods():
+def should_update_dhw_heating():
     global prev_hour
 
     update_needed = True
     if prev_hour != -1:
         current_hour = int(time.strftime("%H"))
-        update_needed = current_hour != prev_hour and time.strftime("%H:%M") == config.HEATING_PERIODS_UPDATE_TIME_OF_DAY
+        update_needed = current_hour != prev_hour and time.strftime("%H:%M") == config.DHW_HEATING_UPDATE_TIME_OF_DAY
     prev_hour = int(time.strftime("%H"))
     return update_needed
 
@@ -107,16 +106,19 @@ def maybe_start_dhw_heating(ecodan_client, now):
         ecodan_client.set_hot_water_and_holiday(dhw_force=True)
 
 def maybe_set_temperature_setpoint(ecodan_client, now):
-    if not heating_periods:
+    global last_setpoint_update_slot
+    global temperature_setpoint
+
+    # Update at the start of every MIN_HEATING_PERIOD_DURATION_SECONDS slot aligned to wall clock time.
+    slot = int(now // config.MIN_HEATING_PERIOD_DURATION_SECONDS)
+    if slot == last_setpoint_update_slot:
         return
+    last_setpoint_update_slot = slot
 
-    heating_period_start, heating_period_end, _temperature_setpoint = heating_periods[0]
-    if now > heating_period_start:
-        heating_periods.pop(0)
-
-        global temperature_setpoint
-        temperature_setpoint = _temperature_setpoint
-        print(f"Setting temperature setpoint to {temperature_setpoint}!")
+    new_setpoint, fraction = get_temperature_setpoint(now)
+    print(f"Price fraction: {fraction:.2f}, setting temperature setpoint to {new_setpoint}.")
+    if new_setpoint != temperature_setpoint:
+        temperature_setpoint = new_setpoint
         ecodan_client.set_options(z1_setpoint=temperature_setpoint)
 
 def main_loop(ecodan_client):
@@ -124,8 +126,8 @@ def main_loop(ecodan_client):
         now = time.time()
         next_tick = time.perf_counter() + 1
 
-        if should_update_heating_periods():
-            update_heating_periods(now)
+        if should_update_dhw_heating():
+            update_dhw_heating_start_time(now)
 
         elif should_fetch_status():
             fetch_status(ecodan_client, now)

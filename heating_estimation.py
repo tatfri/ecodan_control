@@ -88,135 +88,24 @@ def get_dhw_heating_start_time(start_time):
 
     return None
 
-def cut_interval(excluded_interval, intervals):
-    if excluded_interval is None:
-        return intervals
+def get_temperature_setpoint(now):
+    # Compare the price of the next MIN_HEATING_PERIOD_DURATION_SECONDS to all known future prices.
+    estimated_price = estimate_heating_energy_price(now)
+    if estimated_price < config.HEATING_ELECTRICITY_PRICE_LIMIT_EUROS * 100:
+        return config.INITIAL_INDOOR_TEMPERATURE, None
 
-    result = []
-    ex_start, ex_end = excluded_interval
-    for start, end in intervals:
-        if end <= ex_start or start >= ex_end:
-            result.append((start, end))
-        else:
-            if start < ex_start:
-                result.append((start, ex_start))
-            if end > ex_end:
-                result.append((ex_end, end))
-    return result
+    fraction = electricity_client.get_price_fraction(now, config.MIN_HEATING_PERIOD_DURATION_SECONDS)
+    if fraction is None:
+        return config.INITIAL_INDOOR_TEMPERATURE, None
 
-def cut_intervals(excluded_intervals, intervals):
-    result = intervals
-    for excluded_interval in excluded_intervals:
-        result = cut_interval(excluded_interval, result)
-    return result
+    return get_temperature_setpoint_for_fraction(fraction), fraction
 
-def join_intervals(intervals0, intervals1):
-    result = []
-    all_intervals = sorted(intervals0 + intervals1, key=lambda x: x[0])
-    for interval in all_intervals:
-        if not result:
-            result.append(interval)
-        else:
-            last_start, last_end = result[-1]
-            current_start, current_end = interval
-            if current_start <= last_end:
-                result[-1] = (last_start, max(last_end, current_end))
-            else:
-                result.append(interval)
-    return result
-
-def get_low_price_intervals(start_time, fraction):
-    return electricity_client.get_low_price_intervals(start_time, start_time + ESTIMATION_DURATION_SECONDS, fraction)
-
-def merge_short_intervals(original_intervals, min_interval_length):
-    # If there are intervals that are shorter than minimun interval with their neighbors. Merge them with
-    # either the previous or the next interval depending on which one has lower set temperature. Set the
-    # merged interval's temperature to the lower one.
-
-    intervals = original_intervals.copy()
-
-    change_done = True
-    while change_done:
-        change_done = False
-        i = 0
-        while i < len(intervals):
-            start, end, temperature_setpoint = intervals[i]
-            if end - start < min_interval_length:
-                change_done = True
-                if i > 0 and i < len(intervals) - 1:
-                    prev_start, prev_end, prev_temp = intervals[i - 1]
-                    next_start, next_end, next_temp = intervals[i + 1]
-                    if prev_temp < next_temp:
-                        intervals[i - 1] = (prev_start, end, prev_temp)
-                        del intervals[i]
-                        i -= 1
-                    else:
-                        intervals[i + 1] = (start, next_end, next_temp)
-                        del intervals[i]
-                        i -= 1
-                elif i > 0:
-                    prev_start, prev_end, prev_temp = intervals[i - 1]
-                    intervals[i - 1] = (prev_start, end, prev_temp)
-                    del intervals[i]
-                    i -= 1
-                elif i < len(intervals) - 1:
-                    next_start, next_end, next_temp = intervals[i + 1]
-                    intervals[i + 1] = (start, next_end, next_temp)
-                    del intervals[i]
-                    i -= 1
-            i += 1
-    return intervals
-
-def join_consecutive_intervals(intervals):
-    joined_intervals = []
-    for start, end, temperature_setpoint in intervals:
-        if joined_intervals and joined_intervals[-1][1] == start and joined_intervals[-1][2] == temperature_setpoint:
-            joined_intervals[-1] = (joined_intervals[-1][0], end, temperature_setpoint)
-        else:
-            joined_intervals.append((start, end, temperature_setpoint))
-    return joined_intervals
-
-def get_heating_periods(start_time, schedule_dhw_heating):
+def get_dhw_start_time_and_clear_caches(start_time):
     weather_client.clear()
     electricity_client.clear()
+    return get_dhw_heating_start_time(start_time)
 
-    dwh_heating_start_time = None
-    if schedule_dhw_heating:
-        dwh_heating_start_time = get_dhw_heating_start_time(start_time)
-
-    estimated_price = estimate_heating_energy_price(start_time)
-
-    if (estimated_price < config.HEATING_ELECTRICITY_PRICE_LIMIT_EUROS * 100):
-        return [(start_time, start_time + ESTIMATION_DURATION_SECONDS, config.INITIAL_INDOOR_TEMPERATURE)], dwh_heating_start_time
-
-    all_intervals = []
-    prev_intervals = []
-
-    for i in range(5):
-        fraction = (i + 1) * 0.20
-        intervals = get_low_price_intervals(start_time, fraction)
-
-        intervals = cut_intervals(prev_intervals, intervals)
-        prev_intervals = join_intervals(prev_intervals, intervals)
-
-        for start, end in intervals:
-            # - 0.001 so that 0.6000000000000001 gets handled right
-            all_intervals.append((start, end, get_temperature_setpoint_for_fraction(fraction - 0.001)))
-
-    all_intervals = sorted(all_intervals, key=lambda x: x[0])
-
-    # Join consecutive intervals with same temperature
-    joined_intervals = join_consecutive_intervals(all_intervals)
-
-    # Merge intervals that are shorter than the minimum heating period duration.
-    joined_intervals = merge_short_intervals(joined_intervals, config.MIN_HEATING_PERIOD_DURATION_SECONDS)
-
-    # Join again because the previous step may have created new consecutive intervals with the same temperature.
-    joined_intervals = join_consecutive_intervals(joined_intervals)
-
-    return joined_intervals, dwh_heating_start_time
-
-def print_periods(start_time, periods, dhw_heating_start_time):
+def print_summary(start_time, dhw_heating_start_time):
     end_time = start_time + ESTIMATION_DURATION_SECONDS
     min_temperature = weather_client.get_min_temperature(start_time, end_time)
     max_temperature = weather_client.get_max_temperature(start_time, end_time)
@@ -244,19 +133,14 @@ def print_periods(start_time, periods, dhw_heating_start_time):
     print("")
     print("DHW heating start:", time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(dhw_heating_start_time)))
     print("")
-    for period in periods:
-        start, stop, temperature_setpoint = period
-        print("Heating period:", time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start)), "to", time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(stop)), "with temperature setpoint:", temperature_setpoint)
     print("--------------------------------------------------")
 
 
 if __name__ == "__main__":
-    import time
-
-    #start_time = int(time.time()) - 12 * 60 * 60
     start_time = int(time.time())
 
-    schedule_dhw_heating = True
-    heating_periods, dhw_heating_start_time = get_heating_periods(start_time, schedule_dhw_heating)
+    dhw_heating_start_time = get_dhw_start_time_and_clear_caches(start_time)
+    print_summary(start_time, dhw_heating_start_time)
 
-    print_periods(start_time, heating_periods, dhw_heating_start_time)
+    setpoint, fraction = get_temperature_setpoint(start_time)
+    print(f"Current price fraction: {fraction}, temperature setpoint: {setpoint}")

@@ -102,6 +102,34 @@ def get_max_price(start_time, end_time):
 
     return max(price for _, _, price in relevant_prices)
 
+def get_price_fraction(start_time: float, duration: float) -> float | None:
+    """
+    Return the fraction (0.0 - 1.0) of known future time, starting from start_time, during
+    which the price is strictly lower than the average price of the window
+    [start_time, start_time + duration]. 0.0 means the window is among the cheapest.
+
+    Returns None if no price data is known for the window.
+    """
+
+    _maybe_fetch_prices()
+
+    future = [(max(s, start_time), e, p) for s, e, p in prices if e > start_time]
+    if not future:
+        return None
+
+    window_end = start_time + duration
+    window_price = get_average_price(start_time, window_end)
+
+    total_duration = 0.0
+    cheaper_duration = 0.0
+    for start, end, price in future:
+        interval_duration = end - start
+        total_duration += interval_duration
+        if price < window_price:
+            cheaper_duration += interval_duration
+
+    return cheaper_duration / total_duration if total_duration > 0 else None
+
 def get_low_price_intervals(
     start_time: float,
     end_time: float,

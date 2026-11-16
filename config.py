@@ -8,7 +8,8 @@ ECODAN_UART = "/dev/ttyAMA0"
 INDOOR_TEMPERATURE_MIDDLE_POINT = 19.0
 
 # Temperature adjustments based on the fraction of low electricity price intervals.
-# 0.2 means that the price is in the lowest 20% of all prices within 24 hours.
+# 0.2 means that the price of the next MIN_HEATING_PERIOD_DURATION_SECONDS is in the lowest 20% of
+# all known future prices.
 TEMPERATURE_ADJUSTMENT = [
     (0.2, 1.0),
     (0.4, 0.0),
@@ -26,16 +27,16 @@ INITIAL_INDOOR_TEMPERATURE = 19.0
 # may continue into more expensive electricity price periods.
 DHW_TANK_HEATING_PERIOD_DURATION_SECONDS = 20 * 60  # 20 minutes
 
-# Time of the day when the estimation for the next 24h period will be updated.
-# Finnish electricity market prices for the next day will be available around 14:00.
-HEATING_PERIODS_UPDATE_TIME_OF_DAY = "15:00"
+# Time of the day when electricity prices are refetched and the forced DHW heating time for the
+# next 24h is selected. Finnish electricity market prices for the next day will be available around
+# 14:00.
+DHW_HEATING_UPDATE_TIME_OF_DAY = "15:00"
 
-# Minimum length for a temperature adjustment interval. Finnish electricity market prices are updated
-# once every 15 minutes, but the heat pump will usually take around 6 minutes to start/stop after
-# adjusting the temperature so utilizing intervals shorter than this minimum duration may not be effective.
-#
-# Value of 20 minutes here forces minimum period length to 30 minutes.
-MIN_HEATING_PERIOD_DURATION_SECONDS = 20 * 60  # 20 minutes
+# Interval at which the temperature setpoint is recalculated, and the length of the price window
+# compared to future prices. Finnish electricity market prices are updated once every 15 minutes,
+# but the heat pump will usually take around 6 minutes to start/stop after adjusting the temperature
+# so utilizing intervals shorter than this minimum duration may not be effective.
+MIN_HEATING_PERIOD_DURATION_SECONDS = 30 * 60  # 30 minutes
 
 # -----------------------
 # Settings below only affect estimation of heating energy needed, they do not affect the control.

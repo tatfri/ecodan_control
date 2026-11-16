@@ -11,7 +11,7 @@ This uses a [Python implementation of the CN105 protocol](https://github.com/tat
 > This is an unofficial, unsupported implementation based on reverse-engineered Mitsubishi Electric protocol. [Melcloud](https://www.melcloud.com/) is the Mitsubishi Electric's officially supported commercial solution
 > for remote control of compatible heat pumps.
 
-The plot below shows electricity price and heat pump output power for a 16 days period. Output power tends to be zero when electricity price is high, except when heating DHW tank is needed.
+The plot below shows electricity price and heat pump output power for a 16 days period. Input power tends to be zero when electricity price is high, except when heating DHW tank is needed.
 
 ![Plot of 16 days of electricity prices and heating.](/doc/plot.png)
 
@@ -26,8 +26,8 @@ Electricity market prices are fetched from https://porssisahko.net/api once in 2
 for the next 24 hours. If the estimated cost is below a set limit, temperature control is skipped to avoid fluctuations in indoor temperature.
 The heating cost estimation is based on temperature forecast fetched from https://opendata.fmi.fi/wfs.
 
-The algorithm finds time intervals within the 24 hour period in which electricity price is at the lowest 20% of the period, then the
-lowest 40% etc. Temperature adjustment is then done around the configured temperature middle point like this:
+Every 30 minutes the algorithm calculates the average price of the next
+30 minutes and compares it to all known future prices. The fraction of known future time during which the price is lower than that gives the price fraction. Temperature adjustment is then done around the configured temperature middle point like this:
 
 | Price fraction | Temperature adjustment |
 |----------|------------------------|
@@ -37,11 +37,11 @@ lowest 40% etc. Temperature adjustment is then done around the configured temper
 | 60% - 80% | -1 °C |
 | 80% - 100% | -1 °C |
 
-One forced DHW heating period is scheduled to be started when the electricity price is at the lowest point of the 24 hour period, for a period
-long enough to get the tank heated, as configured.
+One forced DHW heating period is scheduled to be started when the electricity price is at the lowest point of the next 24 hours, for a period
+long enough to get the tank heated.
 
 The software then polls Ecodan for updated status, which is used for logging, and sets the temperature setpoint and triggers forced DHW heating,
-until it is time again to fetch electricity prices and do another 24 hour heating plan.
+until it is time again to fetch electricity prices and select the next DHW heating time.
 
 ## Getting started
 

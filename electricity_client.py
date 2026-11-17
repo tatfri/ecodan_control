@@ -104,17 +104,27 @@ def get_max_price(start_time, end_time):
 
 def get_price_fraction(start_time: float, duration: float) -> float | None:
     """
-    Return the fraction (0.0 - 1.0) of known future time, starting from start_time, during
-    which the price is strictly lower than the average price of the window
-    [start_time, start_time + duration]. 0.0 means the window is among the cheapest.
+    Return the fraction (0.0 - 1.0) of a 24 hour reference period during which the price
+    is strictly lower than the average price of the window [start_time, start_time + duration].
+    0.0 means the window is among the cheapest.
+
+    The reference period starts at start_time and extends into the future as far as prices
+    are known (at most 24 hours). Any remainder is taken from the past, immediately
+    before start_time.
 
     Returns None if no price data is known for the window.
     """
 
     _maybe_fetch_prices()
 
-    future = [(max(s, start_time), e, p) for s, e, p in prices if e > start_time]
-    if not future:
+    reference_duration = 24 * 3600.0
+    known_end = min(max((e for _, e, _ in prices), default=start_time), start_time + reference_duration)
+    if known_end <= start_time:
+        return None
+
+    ref_start = start_time - (reference_duration - (known_end - start_time))
+    relevant = [(max(s, ref_start), min(e, known_end), p) for s, e, p in prices if e > ref_start and s < known_end]
+    if not relevant:
         return None
 
     window_end = start_time + duration
@@ -122,7 +132,7 @@ def get_price_fraction(start_time: float, duration: float) -> float | None:
 
     total_duration = 0.0
     cheaper_duration = 0.0
-    for start, end, price in future:
+    for start, end, price in relevant:
         interval_duration = end - start
         total_duration += interval_duration
         if price < window_price:

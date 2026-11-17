@@ -27,7 +27,7 @@ for the next 24 hours. If the estimated cost is below a set limit, temperature c
 The heating cost estimation is based on temperature forecast fetched from https://opendata.fmi.fi/wfs.
 
 Every 30 minutes the algorithm calculates the average price of the next
-30 minutes and compares it to all known future prices. The fraction of known future time during which the price is lower than that gives the price fraction. Temperature adjustment is then done around the configured temperature middle point like this:
+30 minutes and compares it to a 24 hour reference period. The period uses known future prices as far as available (up to 24 hours) and is filled from the past prices immediately before the current time if the future data is shorter. The fraction of the reference period during which the price is lower than that gives the price fraction. Temperature adjustment is then done around the configured temperature middle point like this:
 
 | Price fraction | Temperature adjustment |
 |----------|------------------------|
